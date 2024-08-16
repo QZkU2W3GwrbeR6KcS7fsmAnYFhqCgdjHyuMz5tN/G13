@@ -22,8 +22,10 @@ const HIGH_NETWORK_USAGE = 100 * 1024 * 1024; // 100MB
 const HIGH_CPU_THRESHOLD = 0.9;
 const SMALL_VOLUME_SIZE = 15 * 1024 * 1024; // 15MB
 const SCAN_INTERVAL = 5 * 60 * 1000; // 5 minutes in milliseconds
-
-const docker = new Docker();
+const FLAGGED_CONTAINERS_FILE = 'flagged_containers.json';
+const PTERODACTYL_API_URL = 'https://panel.xeh.sh/api/application';
+const PTERODACTYL_API_KEY = 'ptla_qvMwYHlUfnM2f9rAIA4CY85IEzRGlamWYZdFxKzy381';
+const PTERODACTYL_SESSION_COOKIE = 'none';
 
 async function calculateFileHash(filePath) {
   return new Promise((resolve, reject) => {
@@ -120,17 +122,67 @@ async function checkVolume(volumeId) {
   return flags;
 }
 
+async function getServerIdFromUUID(uuid) {
+  try {
+    const response = await axios.get(`${PTERODACTYL_API_URL}/servers?per_page=50000`, {
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${PTERODACTYL_API_KEY}`,
+        'Cookie': PTERODACTYL_SESSION_COOKIE
+      }
+    });
+
+    const server = response.data.data.find(server => server.attributes.uuid === uuid);
+    return server ? server.attributes.id : null;
+  } catch (error) {
+    console.error('Error fetching server data:', error);
+    return null;
+  }
+}
+
+async function suspendServer(serverId) {
+  try {
+    await axios.post(`${PTERODACTYL_API_URL}/servers/${serverId}/suspend`, {}, {
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${PTERODACTYL_API_KEY}`,
+        'Cookie': PTERODACTYL_SESSION_COOKIE
+      }
+    });
+    console.log(`Server ${serverId} suspended successfully.`);
+  } catch (error) {
+    console.error(`Error suspending server ${serverId}:`, error);
+  }
+}
+
 async function scanAllContainers() {
   const volumeIds = fs.readdirSync(VOLUMES_DIR).filter(id => id.length === 36); // Assuming UUIDs
   for (const volumeId of volumeIds) {
+    if (flaggedContainers[volumeId]) {
+      console.log(`Container ${volumeId} already flagged. Skipping...`);
+      continue;
+    }
+
     const flags = await checkVolume(volumeId);
     if (flags.length > 0) {
+      const serverId = await getServerIdFromUUID(volumeId);
+      if (serverId) {
+        await suspendServer(serverId);
+      }
+
       const message = {
-        content: `G13 detected suspicious activity from \`${volumeId}\`:\n\n` + flags.join('\n')
+        content: `G13 detected suspicious activity from \`${volumeId}\`:\n\n` + flags.join('\n') +
+                 `\n\nServer ${serverId ? `(ID: ${serverId}) ` : ''}has been suspended.`
       };
       try {
         await axios.post(WEBHOOK_URL, message);
         console.log(`Sent alert for container ${volumeId}`);
+        
+        // Mark the container as flagged
+        flaggedContainers[volumeId] = true;
+        fs.writeFileSync(FLAGGED_CONTAINERS_FILE, JSON.stringify(flaggedContainers));
       } catch (error) {
         console.error(`Error sending alert for container ${volumeId}:`, error);
       }
