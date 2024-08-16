@@ -164,6 +164,7 @@ async function suspendServer(serverId) {
   }
 }
 
+
 async function scanAllContainers() {
   const volumeIds = fs.readdirSync(VOLUMES_DIR).filter(id => id.length === 36); // Assuming UUIDs
   for (const volumeId of volumeIds) {
@@ -179,10 +180,37 @@ async function scanAllContainers() {
         await suspendServer(serverId);
       }
 
-      const message = {
-        content: `Radar detected suspicious activity from XEH server \`${volumeId}\`:\n\n` + flags.join('\n') +
-                 `\n\nSuspension has been issued for the server ${serverId ? `(Panel ID: ${serverId}) ` : ''}.`
+      const embed = {
+        title: "Suspicious activity detected.",
+        color: 0x242424,
+        fields: [
+          {
+            name: "Server UUID",
+            value: volumeId,
+            inline: true
+          },
+          {
+            name: "Panel ID",
+            value: serverId || "Unknown",
+            inline: true
+          },
+          {
+            name: "Flags",
+            value: flags.join('\n')
+          }
+        ],
+        footer: {
+          text: "XEH Radar",
+          icon_url: "https://i.imgur.com/xs1qqR7.png"
+        },
+        timestamp: new Date().toISOString()
       };
+
+      const message = {
+        embeds: [embed],
+        content: "Radar report [" + new Date().toISOString() + "]"
+      };
+
       try {
         await axios.post(WEBHOOK_URL, message);
         console.log(`Sent alert for container ${volumeId}`);
