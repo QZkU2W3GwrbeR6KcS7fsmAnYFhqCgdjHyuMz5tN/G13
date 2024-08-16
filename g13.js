@@ -49,13 +49,16 @@ async function checkVolume(volumeId) {
   const volumePath = path.join(VOLUMES_DIR, volumeId);
   const flags = [];
 
-  // Check 1: Search for small .jar files
-  const jarFiles = glob.sync(`${volumePath}/**/*.jar`, {nodir: true});
+  // Check 1: Search for small .jar files only in the root folder
+  const jarFiles = fs.readdirSync(volumePath)
+    .filter(file => file.endsWith('.jar'))
+    .map(file => path.join(volumePath, file));
+
   for (const file of jarFiles) {
     const stats = fs.statSync(file);
     if (stats.size < MAX_JAR_SIZE) {
       const hash = await calculateFileHash(file);
-      flags.push(`Flag 1: Small .jar file detected - ${file} (${stats.size} bytes, SHA256: ${hash})`);
+      flags.push(`Flag 1: Small .jar file detected in root folder - ${file} (${stats.size} bytes, SHA256: ${hash})`);
     }
   }
 
