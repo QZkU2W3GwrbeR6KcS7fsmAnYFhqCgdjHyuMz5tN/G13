@@ -122,12 +122,6 @@ async function checkVolume(volumeId) {
     if (cpuUsage > HIGH_CPU_THRESHOLD && volumeSize < SMALL_VOLUME_SIZE) {
       flags.push(`Flag 7: High CPU usage (${(cpuUsage * 100).toFixed(2)}%) with small volume size (${(volumeSize / (1024 * 1024)).toFixed(2)} MB)`);
     }
-
-    // Memory usage check
-    const memoryUsage = stats.memory_stats.usage / stats.memory_stats.limit;
-    if (memoryUsage > 0.9) {
-      flags.push(`Flag 8: High memory usage detected - ${(memoryUsage * 100).toFixed(2)}%`);
-    }
   } catch (error) {
     console.error(`Error retrieving stats for container ${volumeId}:`, error);
   }
