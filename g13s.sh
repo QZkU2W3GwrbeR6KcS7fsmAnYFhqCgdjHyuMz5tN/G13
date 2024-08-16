@@ -1,11 +1,9 @@
 #!/bin/bash
 
 echo "Working on it..."
-sudo mkdir -p /etc/apt/keyrings
-curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key | sudo gpg --dearmor -o /etc/apt/keyrings/nodesource.gpg
-echo "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_16.x nodistro main" | sudo tee /etc/apt/sources.list.d/nodesource.list
+curl -sL https://deb.nodesource.com/setup_16.x | sudo -E bash -
 sudo apt update
-sudo apt install -y nodejs npm
+sudo apt-get install -y nodejs
 sudo mkdir -p /etc/g13
 sudo curl -o /etc/g13/g13.js https://raw.githubusercontent.com/xehsoftware/G13/main/g13.js
 sudo npm init -y
