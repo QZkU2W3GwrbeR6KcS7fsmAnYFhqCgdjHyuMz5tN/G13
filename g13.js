@@ -27,6 +27,12 @@ const PTERODACTYL_API_URL = 'https://panel.xeh.sh/api/application';
 const PTERODACTYL_API_KEY = 'ptla_qvMwYHlUfnM2f9rAIA4CY85IEzRGlamWYZdFxKzy381';
 const PTERODACTYL_SESSION_COOKIE = 'none';
 
+// Load or initialize the flagged containers
+let flaggedContainers = {};
+if (fs.existsSync(FLAGGED_CONTAINERS_FILE)) {
+  flaggedContainers = JSON.parse(fs.readFileSync(FLAGGED_CONTAINERS_FILE, 'utf-8'));
+}
+
 async function calculateFileHash(filePath) {
   return new Promise((resolve, reject) => {
     const hash = crypto.createHash('sha256');
