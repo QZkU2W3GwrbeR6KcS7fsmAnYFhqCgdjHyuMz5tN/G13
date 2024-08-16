@@ -9,6 +9,7 @@ sudo curl -o /etc/g13/g13.js https://raw.githubusercontent.com/xehsoftware/G13/m
 cd /etc/g13
 sudo npm init -y
 sudo npm install dockerode fs-extra axios path glob crypto pm2 -g
+sudo npm install dockerode fs-extra axios path glob crypto pm2
 sudo pm2 start /etc/g13/g13.js --name "g13"
 sudo pm2 save
 sudo pm2 startup
