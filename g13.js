@@ -33,6 +33,8 @@ if (fs.existsSync(FLAGGED_CONTAINERS_FILE)) {
   flaggedContainers = JSON.parse(fs.readFileSync(FLAGGED_CONTAINERS_FILE, 'utf-8'));
 }
 
+const docker = new Docker();
+
 async function calculateFileHash(filePath) {
   return new Promise((resolve, reject) => {
     const hash = crypto.createHash('sha256');
