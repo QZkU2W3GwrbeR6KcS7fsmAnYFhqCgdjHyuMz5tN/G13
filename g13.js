@@ -50,7 +50,8 @@ async function checkVolume(volumeId) {
   const flags = [];
 
   // Check 1: Search for small .jar files only in the root folder
-  const jarFiles = fs.readdirSync(volumePath)
+  const rootFiles = fs.readdirSync(volumePath);
+  const jarFiles = rootFiles
     .filter(file => file.endsWith('.jar'))
     .map(file => path.join(volumePath, file));
 
@@ -77,29 +78,30 @@ async function checkVolume(volumeId) {
   }
 
   // Check 3: Search for suspicious content in files
-  const allFiles = glob.sync(`${volumePath}/**/*`, {nodir: true});
-  for (const file of allFiles) {
-    try {
-      const content = fs.readFileSync(file, 'utf-8');
-      SUSPICIOUS_WORDS.forEach(word => {
-        if (content.includes(word)) {
-          flags.push(`Flag 3: Suspicious content detected - '${word}' in ${file}`);
-        }
-      });
-    } catch (error) {
-      console.error(`Error reading file ${file}:`, error);
-    }
+  for (const file of rootFiles) {
+    const filePath = path.join(volumePath, file);
+    if (fs.statSync(filePath).isFile()) {
+      try {
+        const content = fs.readFileSync(filePath, 'utf-8');
+        SUSPICIOUS_WORDS.forEach(word => {
+          if (content.includes(word)) {
+            flags.push(`Flag 3: Suspicious content detected - '${word}' in ${file}`);
+          }
+        });
+      } catch (error) {
+        console.error(`Error reading file ${file}:`, error);
+      }
 
-    // Check 4: Suspicious file names
-    const baseName = path.basename(file);
-    if (SUSPICIOUS_FILE_NAMES.includes(baseName)) {
-      flags.push(`Flag 4: Suspicious file name detected - '${baseName}'`);
-    }
+      // Check 4: Suspicious file names
+      if (SUSPICIOUS_FILE_NAMES.includes(file)) {
+        flags.push(`Flag 4: Suspicious file name detected - '${file}'`);
+      }
 
-    // Check 5: Suspicious file extensions
-    const ext = path.extname(file);
-    if (SUSPICIOUS_EXTENSIONS.includes(ext)) {
-      flags.push(`Flag 5: Suspicious file extension detected - '${ext}' (${file})`);
+      // Check 5: Suspicious file extensions
+      const ext = path.extname(file);
+      if (SUSPICIOUS_EXTENSIONS.includes(ext)) {
+        flags.push(`Flag 5: Suspicious file extension detected - '${ext}' (${file})`);
+      }
     }
   }
 
