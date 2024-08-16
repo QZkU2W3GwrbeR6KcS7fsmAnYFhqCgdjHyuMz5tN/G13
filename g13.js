@@ -25,7 +25,7 @@ const SMALL_VOLUME_SIZE = 15 * 1024 * 1024; // 15MB
 const SCAN_INTERVAL = 5 * 60 * 1000; // 5 minutes in milliseconds
 const FLAGGED_CONTAINERS_FILE = 'flagged_containers.json';
 const PTERODACTYL_API_URL = 'https://panel.xeh.sh/api/application';
-const PTERODACTYL_API_KEY = 'ptla_qvMwYHlUfnM2f9rAIA4CY85IEzRGlamWYZdFxKzy381';
+const PTERODACTYL_API_KEY = 'ptla_wotLGr7IfY1clScpwjdKyVSAAMSlKglZF3q40eQS5Ia';
 const PTERODACTYL_SESSION_COOKIE = 'none';
 
 // Load or initialize the flagged containers
