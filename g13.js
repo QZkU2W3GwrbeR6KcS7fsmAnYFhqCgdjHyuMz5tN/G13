@@ -4,6 +4,7 @@ const axios = require('axios');
 const Docker = require('dockerode');
 const glob = require('glob');
 const crypto = require('crypto');
+const toml = require('toml');
 
 const VOLUMES_DIR = '/var/lib/pterodactyl/volumes';
 const WEBHOOK_URL = 'https://discord.com/api/webhooks/1273963073757122643/c4r_l-uZu7Tml9BpKoH4q2wAAsipJsrDg09B3qQzs4zFnhYkWcH8A3BgnRPiiAFevWEy';
@@ -45,9 +46,117 @@ async function calculateFileHash(filePath) {
   });
 }
 
+async function parseVelocityToml(volumePath) {
+  const velocityTomlPath = path.join(volumePath, 'velocity.toml');
+  if (fs.existsSync(velocityTomlPath)) {
+    const content = await fs.readFile(velocityTomlPath, 'utf-8');
+    const parsed = toml.parse(content);
+    return parsed.servers || {};
+  }
+  return {};
+}
+
+async function getNodes() {
+  try {
+    const response = await axios.get(`${PTERODACTYL_API_URL}/nodes`, {
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${PTERODACTYL_API_KEY}`,
+        'Cookie': PTERODACTYL_SESSION_COOKIE
+      }
+    });
+    return response.data.data;
+  } catch (error) {
+    console.error('Error fetching nodes:', error);
+    return [];
+  }
+}
+
+async function getNodeAllocations(nodeId) {
+  try {
+    const response = await axios.get(`${PTERODACTYL_API_URL}/nodes/${nodeId}/allocations`, {
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${PTERODACTYL_API_KEY}`,
+        'Cookie': PTERODACTYL_SESSION_COOKIE
+      }
+    });
+    return response.data.data;
+  } catch (error) {
+    console.error(`Error fetching allocations for node ${nodeId}:`, error);
+    return [];
+  }
+}
+
+async function getAllServers() {
+  try {
+    const response = await axios.get(`${PTERODACTYL_API_URL}/servers`, {
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${PTERODACTYL_API_KEY}`,
+        'Cookie': PTERODACTYL_SESSION_COOKIE
+      }
+    });
+    return response.data.data;
+  } catch (error) {
+    console.error('Error fetching all servers:', error);
+    return [];
+  }
+}
+
+async function checkForAltAccounts(volumeId, velocityServers) {
+  const nodes = await getNodes();
+  const allServers = await getAllServers();
+  const matchedServers = [];
+
+  for (const node of nodes) {
+    const allocations = await getNodeAllocations(node.attributes.id);
+    for (const [serverName, serverAddress] of Object.entries(velocityServers)) {
+      const [ip, port] = serverAddress.split(':');
+      const matchingAllocation = allocations.find(a => a.attributes.port.toString() === port);
+      if (matchingAllocation) {
+        const matchingServer = allServers.find(s => s.attributes.allocation === matchingAllocation.attributes.id);
+        if (matchingServer) {
+          matchedServers.push({
+            name: serverName,
+            serverId: matchingServer.attributes.id,
+            userId: matchingServer.attributes.user
+          });
+        }
+      }
+    }
+  }
+
+  if (matchedServers.length > 1) {
+    const users = new Set(matchedServers.map(s => s.userId));
+    if (users.size > 1) {
+      // Potential alt accounts detected
+      const message = {
+        content: `Potential alt accounts detected for servers linked to volume ${volumeId}:\n` +
+                 matchedServers.map(s => `Server: ${s.name}, ID: ${s.serverId}, User: ${s.userId}`).join('\n')
+      };
+      await axios.post(WEBHOOK_URL, message);
+
+      // Suspend all matched servers
+      for (const server of matchedServers) {
+        await suspendServer(server.serverId);
+      }
+    }
+  }
+}
+
 async function checkVolume(volumeId) {
   const volumePath = path.join(VOLUMES_DIR, volumeId);
   const flags = [];
+
+  // Check: Parse velocity.toml and check for alt accounts
+  const velocityServers = await parseVelocityToml(volumePath);
+  if (Object.keys(velocityServers).length > 0) {
+    await checkForAltAccounts(volumeId, velocityServers);
+  }
 
   // Check 1: Search for small .jar files only in the root folder
   const rootFiles = fs.readdirSync(volumePath);
