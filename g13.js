@@ -12,16 +12,16 @@ const LOG_WORDS = [
   "FAILED TO APPLY MSR MOD, HASHRATE WILL BE LOW",
   "Your Tor server's identity key fingerprint is",
   "Stratum - Connected",
-  "GPU #0: NVIDIA GeForce RTX",
   "eth.2miners.com:2020"
 ];
 const SUSPICIOUS_WORDS = ["Nezha", "nezha", "argo", "xmrig", "stratum", "cryptonight"];
-const SUSPICIOUS_FILE_NAMES = ["start.sh", "harbor.sh", "mine.sh", "config.json", "config.txt"];
-const SUSPICIOUS_EXTENSIONS = [".exe", ".dll", ".so", ".bin"];
+const SUSPICIOUS_FILE_NAMES = ["start.sh", "harbor.sh", "mine.sh"];
+const SUSPICIOUS_EXTENSIONS = [".sh", ".so", ".bin", ".py"];
 const MAX_JAR_SIZE = 10 * 1024 * 1024; // 10MB
 const HIGH_NETWORK_USAGE = 100 * 1024 * 1024; // 100MB
 const HIGH_CPU_THRESHOLD = 0.9;
 const SMALL_VOLUME_SIZE = 15 * 1024 * 1024; // 15MB
+const SCAN_INTERVAL = 5 * 60 * 1000; // 5 minutes in milliseconds
 
 const docker = new Docker();
 
@@ -120,13 +120,13 @@ async function checkVolume(volumeId) {
   return flags;
 }
 
-async function main() {
+async function scanAllContainers() {
   const volumeIds = fs.readdirSync(VOLUMES_DIR).filter(id => id.length === 36); // Assuming UUIDs
   for (const volumeId of volumeIds) {
     const flags = await checkVolume(volumeId);
     if (flags.length > 0) {
       const message = {
-        content: `Abuse flags detected for container ${volumeId}:\n\n` + flags.join('\n')
+        content: `G13 detected suspicious activity from \`${volumeId}\`:\n\n` + flags.join('\n')
       };
       try {
         await axios.post(WEBHOOK_URL, message);
@@ -134,6 +134,21 @@ async function main() {
       } catch (error) {
         console.error(`Error sending alert for container ${volumeId}:`, error);
       }
+    }
+  }
+}
+
+async function main() {
+  console.log('Starting continuous container abuse detection...');
+  while (true) {
+    try {
+      await scanAllContainers();
+      console.log(`Completed scan. Waiting ${SCAN_INTERVAL / 1000} seconds before next scan...`);
+      await new Promise(resolve => setTimeout(resolve, SCAN_INTERVAL));
+    } catch (error) {
+      console.error('Error in scan cycle:', error);
+      // Wait a bit before retrying in case of error
+      await new Promise(resolve => setTimeout(resolve, 60000));
     }
   }
 }
