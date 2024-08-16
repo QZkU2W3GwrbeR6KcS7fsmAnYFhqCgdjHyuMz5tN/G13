@@ -6,6 +6,7 @@ sudo apt update
 sudo apt-get install -y nodejs
 sudo mkdir -p /etc/g13
 sudo curl -o /etc/g13/g13.js https://raw.githubusercontent.com/xehsoftware/G13/main/g13.js
+cd /etc/g13
 sudo npm init -y
 sudo npm install dockerode fs-extra axios path glob crypto pm2 -g
 sudo pm2 start /etc/g13/g13.js --name "g13"
