@@ -115,7 +115,28 @@ async function checkForAltAccounts(volumeId, velocityServers) {
   for (const node of nodes) {
     const allocations = await getNodeAllocations(node.attributes.id);
     for (const [serverName, serverAddress] of Object.entries(velocityServers)) {
-      const [ip, port] = serverAddress.split(':');
+      let ip, port;
+
+      // Handle different possible formats of serverAddress
+      if (typeof serverAddress === 'string') {
+        // Format: "ip:port" or just "port"
+        [ip, port] = serverAddress.split(':');
+        if (!port) {
+          port = ip;
+          ip = null;
+        }
+      } else if (typeof serverAddress === 'object' && serverAddress !== null) {
+        // Format: { address: "ip", port: port }
+        ip = serverAddress.address;
+        port = serverAddress.port;
+      } else {
+        console.warn(`Unexpected format for server address: ${serverAddress}`);
+        continue;
+      }
+
+      // Convert port to string for comparison
+      port = port.toString();
+
       const matchingAllocation = allocations.find(a => a.attributes.port.toString() === port);
       if (matchingAllocation) {
         const matchingServer = allServers.find(s => s.attributes.allocation === matchingAllocation.attributes.id);
