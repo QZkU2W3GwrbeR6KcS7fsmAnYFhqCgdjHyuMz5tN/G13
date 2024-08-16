@@ -200,10 +200,13 @@ async function scanAllContainers() {
           }
         ],
         footer: {
-          text: "XEH Radar",
-          icon_url: "https://i.imgur.com/xs1qqR7.png"
+          text: "XEH, LLC.",
+          icon_url: "https://i.imgur.com/ndIQ5H4.png"
         },
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
+        image: {
+          url: "https://i.imgur.com/xs1qqR7.png"
+        }
       };
 
       const message = {
