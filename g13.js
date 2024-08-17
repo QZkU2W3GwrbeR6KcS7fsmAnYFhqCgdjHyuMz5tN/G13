@@ -1,4 +1,4 @@
-// Radar b91
+// Radar b92
 
 const fs = require('fs-extra');
 const path = require('path');
@@ -543,14 +543,23 @@ async function scanAllContainers() {
 
     try {
       const flags = await checkVolume(volumeId);
-      if (flags.length > 0) {
+      const hardwareFlags = flags.filter(flag => 
+        flag.includes("Abnormally high CPU usage") || 
+        flag.includes("Abnormally high memory usage")
+      );
+      const otherFlags = flags.filter(flag => 
+        !flag.includes("Abnormally high CPU usage") && 
+        !flag.includes("Abnormally high memory usage")
+      );
+
+      if (flags.length > 0 && (otherFlags.length > 0 || hardwareFlags.length > 1)) {
         const serverId = await getServerIdFromUUID(volumeId);
         if (serverId) {
           await suspendServer(serverId);
         }
 
         const embed = {
-          title: "Suspicious activity detected.",
+          title: "Suspicious activity found - server suspended.",
           color: 0xff672f,
           fields: [
             {
@@ -569,7 +578,7 @@ async function scanAllContainers() {
             }
           ],
           footer: {
-            text: "XEH Radar v2 (b91)",
+            text: "XEH Radar v2 (b92)",
             icon_url: "https://i.imgur.com/ndIQ5H4.png"
           },
           timestamp: new Date().toISOString(),
@@ -599,6 +608,7 @@ async function scanAllContainers() {
     }
   }
 }
+
 
 async function main() {
   console.log('Starting continuous container abuse detection...');
