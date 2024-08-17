@@ -18,7 +18,7 @@ const LOG_WORDS = [
 const SUSPICIOUS_WORDS = ["Nezha", "nezha", "argo", "xmrig", "stratum", "cryptonight"];
 const SUSPICIOUS_FILE_NAMES = ["start.sh", "harbor.sh", "mine.sh"];
 const SUSPICIOUS_EXTENSIONS = [".sh", ".so", ".bin", ".py"];
-const MAX_JAR_SIZE = 10 * 1024 * 1024; // 10MB
+const MAX_JAR_SIZE = 10 * 1024 * 1024; // 10MB so it doesnt crash
 const HIGH_NETWORK_USAGE = 5 * 1024 * 1024 * 1024; // 5GB
 const HIGH_CPU_THRESHOLD = 0.9;
 const HIGH_CPU_DURATION = 5 * 60 * 1000; // 5 minutes
@@ -28,14 +28,14 @@ const FLAGGED_CONTAINERS_FILE = 'flagged_containers.json';
 const PTERODACTYL_API_URL = 'https://panel.xeh.sh/api/application';
 const PTERODACTYL_API_KEY = 'ptla_wotLGr7IfY1clScpwjdKyVSAAMSlKglZF3q40eQS5Ia';
 const PTERODACTYL_SESSION_COOKIE = 'none';
-const HIGH_DISK_USAGE_THRESHOLD = 0.9; // 90% of disk usage
+const HIGH_DISK_USAGE_THRESHOLD = 0.95; // 95% of disk usage
 
 // New constants for advanced checks
 const WHATSAPP_INDICATORS = ['whatsapp-web.js', 'whatsapp-web-js', 'webwhatsapi', 'yowsup'];
 const PROXY_VPN_INDICATORS = ['openvpn', 'strongswan', 'wireguard', 'shadowsocks', 'v2ray', 'trojan', 'squid', 'nginx'];
 const NEZHA_INDICATORS = ['nezha', 'argo', 'cloudflared'];
 const MINER_INDICATORS = ['xmrig', 'ethminer', 'cpuminer', 'bfgminer', 'cgminer'];
-const SUSPICIOUS_PORTS = [1080, 3128, 8080, 8118, 9150]; // Common proxy ports
+const SUSPICIOUS_PORTS = [1080, 3128, 8080, 8118, 9150]; // common proxy ports
 
 const docker = new Docker();
 
@@ -308,118 +308,166 @@ async function checkVolume(volumeId) {
   const volumePath = path.join(VOLUMES_DIR, volumeId);
   const flags = [];
 
+  // Check if the volume directory exists
+  if (!fs.existsSync(volumePath)) {
+    console.log(`Volume directory for ${volumeId} does not exist. Skipping...`);
+    return flags;
+  }
+
   // Check 1: Search for small .jar files only in the root folder
-  const rootFiles = fs.readdirSync(volumePath);
-  const jarFiles = rootFiles
-    .filter(file => file.endsWith('.jar'))
-    .map(file => path.join(volumePath, file));
+  try {
+    const rootFiles = fs.readdirSync(volumePath);
+    const jarFiles = rootFiles
+      .filter(file => file.endsWith('.jar'))
+      .map(file => path.join(volumePath, file));
 
-  for (const file of jarFiles) {
-    const stats = fs.statSync(file);
-    if (stats.size < MAX_JAR_SIZE) {
-      const hash = await calculateFileHash(file);
-      const suspiciousContent = await checkJarContent(file);
-      if (suspiciousContent.length > 0) {
-        const flagId = generateFlagId();
-        const description = `Small .jar file with suspicious content - ${file} (${stats.size} bytes, SHA256: ${hash})`;
-        flags.push(`Flag ${flagId}: ${obfuscateDescription(description)}`);
+    for (const file of jarFiles) {
+      const stats = fs.statSync(file);
+      if (stats.size < MAX_JAR_SIZE) {
+        const hash = await calculateFileHash(file);
+        const suspiciousContent = await checkJarContent(file);
+        if (suspiciousContent.length > 0) {
+          const flagId = generateFlagId();
+          const description = `Suspicious .jar file with strange content - ${file} (${stats.size} bytes, SHA256: ${hash})`;
+          flags.push(`Flag ${flagId}: ${obfuscateDescription(description)}`);
+        }
       }
     }
-  }
 
-// Check 2: Analyze container logs
-  const container = docker.getContainer(volumeId);
-  try {
-    const logs = await container.logs({stdout: true, stderr: true, tail: 500});
-    const logText = logs.toString('utf-8');
-    LOG_WORDS.forEach(word => {
-      if (logText.includes(word)) {
-        const flagId = generateFlagId();
-        const description = `Suspicious log entry detected - '${word}'`;
-        flags.push(`Flag ${flagId}: ${obfuscateDescription(description)}`);
+    // Check 3: Search for suspicious content in files
+    for (const file of rootFiles) {
+      const filePath = path.join(volumePath, file);
+      if (fs.statSync(filePath).isFile()) {
+        try {
+          const content = fs.readFileSync(filePath, 'utf-8');
+          SUSPICIOUS_WORDS.forEach(word => {
+            if (content.includes(word)) {
+              const flagId = generateFlagId();
+              const description = `Suspicious content - '${word}' in ${file}`;
+              flags.push(`Flag ${flagId}: ${obfuscateDescription(description)}`);
+            }
+          });
+        } catch (error) {
+          console.error(`Error reading file ${file}:`, error);
+        }
+
+        // Check 4: Suspicious file names
+        if (SUSPICIOUS_FILE_NAMES.includes(file)) {
+          const flagId = generateFlagId();
+          const description = `Suspicious file name - '${file}'`;
+          flags.push(`Flag ${flagId}: ${obfuscateDescription(description)}`);
+        }
+
+        // Check 5: Suspicious file extensions
+        const ext = path.extname(file);
+        if (SUSPICIOUS_EXTENSIONS.includes(ext)) {
+          const flagId = generateFlagId();
+          const description = `Suspicious file extension - '${ext}' (${file})`;
+          flags.push(`Flag ${flagId}: ${obfuscateDescription(description)}`);
+        }
       }
-    });
+    }
   } catch (error) {
-    console.error(`Error retrieving logs for container ${volumeId}:`, error);
+    console.error(`Error processing files for volume ${volumeId}:`, error);
   }
 
-  // Check 3: Search for suspicious content in files
-  for (const file of rootFiles) {
-    const filePath = path.join(volumePath, file);
-    if (fs.statSync(filePath).isFile()) {
-      try {
-        const content = fs.readFileSync(filePath, 'utf-8');
-        SUSPICIOUS_WORDS.forEach(word => {
-          if (content.includes(word)) {
-            const flagId = generateFlagId();
-            const description = `Suspicious content detected - '${word}' in ${file}`;
-            flags.push(`Flag ${flagId}: ${obfuscateDescription(description)}`);
-          }
-        });
-      } catch (error) {
-        console.error(`Error reading file ${file}:`, error);
-      }
-
-      // Check 4: Suspicious file names
-      if (SUSPICIOUS_FILE_NAMES.includes(file)) {
-        const flagId = generateFlagId();
-        const description = `Suspicious file name detected - '${file}'`;
-        flags.push(`Flag ${flagId}: ${obfuscateDescription(description)}`);
-      }
-
-      // Check 5: Suspicious file extensions
-      const ext = path.extname(file);
-      if (SUSPICIOUS_EXTENSIONS.includes(ext)) {
-        const flagId = generateFlagId();
-        const description = `Suspicious file extension detected - '${ext}' (${file})`;
-        flags.push(`Flag ${flagId}: ${obfuscateDescription(description)}`);
-      }
-    }
-  }
-
-  // Check 6: Container resource usage
+  // Container-specific checks
   try {
-    const stats = await container.stats({stream: false});
+    const container = docker.getContainer(volumeId);
     
-    // Network usage check
-    const networkUsage = stats.networks && Object.values(stats.networks)
-      .reduce((acc, curr) => acc + curr.rx_bytes + curr.tx_bytes, 0);
-    if (networkUsage > HIGH_NETWORK_USAGE) {
-      const flagId = generateFlagId();
-      const description = `High network usage detected - ${(networkUsage / (1024 * 1024)).toFixed(2)} MB`;
-      flags.push(`Flag ${flagId}: ${obfuscateDescription(description)}`);
+    // Check if the container is running
+    const containerInfo = await container.inspect();
+    if (containerInfo.State.Status !== 'running') {
+      console.log(`Container ${volumeId} is not running (Status: ${containerInfo.State.Status}). Skipping container-specific checks...`);
+      return flags;
     }
 
-    // CPU usage check
-    const cpuUsage = stats.cpu_stats.cpu_usage.total_usage / stats.cpu_stats.system_cpu_usage;
-    const volumeSize = fs.statSync(volumePath).size;
-    if (cpuUsage > HIGH_CPU_THRESHOLD && volumeSize < SMALL_VOLUME_SIZE) {
-      const flagId = generateFlagId();
-      const description = `High CPU usage (${(cpuUsage * 100).toFixed(2)}%) with small volume size (${(volumeSize / (1024 * 1024)).toFixed(2)} MB)`;
-      flags.push(`Flag ${flagId}: ${obfuscateDescription(description)}`);
+    // Check 2: Analyze container logs
+    try {
+      const logs = await container.logs({stdout: true, stderr: true, tail: 500});
+      const logText = logs.toString('utf-8');
+      LOG_WORDS.forEach(word => {
+        if (logText.includes(word)) {
+          const flagId = generateFlagId();
+          const description = `Suspicious log entry detected - '${word}'`;
+          flags.push(`Flag ${flagId}: ${obfuscateDescription(description)}`);
+        }
+      });
+    } catch (logError) {
+      console.error(`Error retrieving logs for container ${volumeId}:`, logError);
     }
-  } catch (error) {
-    console.error(`Error retrieving stats for container ${volumeId}:`, error);
+
+    // Check 6: Container resource usage
+    try {
+      const stats = await container.stats({stream: false});
+      
+      // Network usage check
+      const networkUsage = stats.networks && Object.values(stats.networks)
+        .reduce((acc, curr) => acc + curr.rx_bytes + curr.tx_bytes, 0);
+      if (networkUsage > HIGH_NETWORK_USAGE) {
+        const flagId = generateFlagId();
+        const description = `High network usage detected - ${(networkUsage / (1024 * 1024)).toFixed(2)} MB`;
+        flags.push(`Flag ${flagId}: ${obfuscateDescription(description)}`);
+      }
+
+      // CPU usage check
+      const cpuUsage = stats.cpu_stats.cpu_usage.total_usage / stats.cpu_stats.system_cpu_usage;
+      const volumeSize = fs.statSync(volumePath).size;
+      if (cpuUsage > HIGH_CPU_THRESHOLD && volumeSize < SMALL_VOLUME_SIZE) {
+        const flagId = generateFlagId();
+        const description = `High CPU usage (${(cpuUsage * 100).toFixed(2)}%) with small volume size (${(volumeSize / (1024 * 1024)).toFixed(2)} MB)`;
+        flags.push(`Flag ${flagId}: ${obfuscateDescription(description)}`);
+      }
+    } catch (statsError) {
+      console.error(`Error retrieving stats for container ${volumeId}:`, statsError);
+    }
+
+    // New advanced checks
+    try {
+      const whatsappCheck = await checkForWhatsAppBot(volumePath);
+      if (whatsappCheck) flags.push(whatsappCheck);
+    } catch (error) {
+      console.error(`Error in WhatsApp bot check for ${volumeId}:`, error);
+    }
+
+    try {
+      const proxyCheck = await checkForProxyOrVPN(container);
+      if (proxyCheck) flags.push(proxyCheck);
+    } catch (error) {
+      console.error(`Error in proxy/VPN check for ${volumeId}:`, error);
+    }
+
+    try {
+      const nezhaCheck = await checkForNezha(container);
+      if (nezhaCheck) flags.push(nezhaCheck);
+    } catch (error) {
+      console.error(`Error in Nezha check for ${volumeId}:`, error);
+    }
+
+    try {
+      const minerCheck = await checkForCryptoMiner(container);
+      if (minerCheck) flags.push(minerCheck);
+    } catch (error) {
+      console.error(`Error in crypto miner check for ${volumeId}:`, error);
+    }
+
+    try {
+      const networkCheck = await checkNetworkAnomalies(container);
+      if (networkCheck) flags.push(networkCheck);
+    } catch (error) {
+      console.error(`Error in network anomaly check for ${volumeId}:`, error);
+    }
+
+    try {
+      const hardwareCheck = await checkHardwareAnomalies(container);
+      if (hardwareCheck) flags.push(hardwareCheck);
+    } catch (error) {
+      console.error(`Error in hardware anomaly check for ${volumeId}:`, error);
+    }
+
+  } catch (containerError) {
+    console.error(`Error processing container ${volumeId}:`, containerError);
   }
-
-  // New advanced checks
-  const whatsappCheck = await checkForWhatsAppBot(volumePath);
-  if (whatsappCheck) flags.push(whatsappCheck);
-
-  const proxyCheck = await checkForProxyOrVPN(container);
-  if (proxyCheck) flags.push(proxyCheck);
-
-  const nezhaCheck = await checkForNezha(container);
-  if (nezhaCheck) flags.push(nezhaCheck);
-
-  const minerCheck = await checkForCryptoMiner(container);
-  if (minerCheck) flags.push(minerCheck);
-
-  const networkCheck = await checkNetworkAnomalies(container);
-  if (networkCheck) flags.push(networkCheck);
-
-  const hardwareCheck = await checkHardwareAnomalies(container);
-  if (hardwareCheck) flags.push(hardwareCheck);
 
   return flags;
 }
@@ -467,57 +515,61 @@ async function scanAllContainers() {
       continue;
     }
 
-    const flags = await checkVolume(volumeId);
-    if (flags.length > 0) {
-      const serverId = await getServerIdFromUUID(volumeId);
-      if (serverId) {
-        await suspendServer(serverId);
-      }
-
-      const embed = {
-        title: "Suspicious activity detected.",
-        color: 0x242424,
-        fields: [
-          {
-            name: "Server UUID",
-            value: volumeId,
-            inline: true
-          },
-          {
-            name: "Panel ID",
-            value: serverId || "Unknown",
-            inline: true
-          },
-          {
-            name: "Flags",
-            value: flags.join('\n')
-          }
-        ],
-        footer: {
-          text: "XEH, LLC.",
-          icon_url: "https://i.imgur.com/ndIQ5H4.png"
-        },
-        timestamp: new Date().toISOString(),
-        image: {
-          url: "https://i.imgur.com/xs1qqR7.png"
+    try {
+      const flags = await checkVolume(volumeId);
+      if (flags.length > 0) {
+        const serverId = await getServerIdFromUUID(volumeId);
+        if (serverId) {
+          await suspendServer(serverId);
         }
-      };
 
-      const message = {
-        embeds: [embed],
-        content: "Radar report [" + new Date().toISOString() + "]"
-      };
+        const embed = {
+          title: "Suspicious activity detected.",
+          color: 0x242424,
+          fields: [
+            {
+              name: "Server UUID",
+              value: volumeId,
+              inline: true
+            },
+            {
+              name: "Panel ID",
+              value: serverId || "Unknown",
+              inline: true
+            },
+            {
+              name: "Flags",
+              value: flags.join('\n')
+            }
+          ],
+          footer: {
+            text: "XEH, LLC.",
+            icon_url: "https://i.imgur.com/ndIQ5H4.png"
+          },
+          timestamp: new Date().toISOString(),
+          image: {
+            url: "https://i.imgur.com/xs1qqR7.png"
+          }
+        };
 
-      try {
-        await axios.post(WEBHOOK_URL, message);
-        console.log(`Sent alert for container ${volumeId}`);
-        
-        // Mark the container as flagged
-        flaggedContainers[volumeId] = true;
-        fs.writeFileSync(FLAGGED_CONTAINERS_FILE, JSON.stringify(flaggedContainers));
-      } catch (error) {
-        console.error(`Error sending alert for container ${volumeId}:`, error);
+        const message = {
+          embeds: [embed],
+          content: "Radar report [" + new Date().toISOString() + "]"
+        };
+
+        try {
+          await axios.post(WEBHOOK_URL, message);
+          console.log(`Sent alert for container ${volumeId}`);
+          
+          // Mark the container as flagged
+          flaggedContainers[volumeId] = true;
+          fs.writeFileSync(FLAGGED_CONTAINERS_FILE, JSON.stringify(flaggedContainers));
+        } catch (error) {
+          console.error(`Error sending alert for container ${volumeId}:`, error);
+        }
       }
+    } catch (error) {
+      console.error(`Error processing volume ${volumeId}:`, error);
     }
   }
 }
@@ -528,11 +580,11 @@ async function main() {
     try {
       await scanAllContainers();
       console.log(`Completed scan. Waiting ${SCAN_INTERVAL / 1000} seconds before next scan...`);
-      await new Promise(resolve => setTimeout(resolve, SCAN_INTERVAL));
     } catch (error) {
       console.error('Error in scan cycle:', error);
-      // Wait a bit before retrying in case of error
-      await new Promise(resolve => setTimeout(resolve, 60000));
+    } finally {
+      // Always wait for the next interval, even if there was an error
+      await new Promise(resolve => setTimeout(resolve, SCAN_INTERVAL));
     }
   }
 }
