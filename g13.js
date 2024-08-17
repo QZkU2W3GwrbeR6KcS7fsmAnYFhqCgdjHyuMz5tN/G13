@@ -1,4 +1,4 @@
-// Radar b90
+// Radar b91
 
 const fs = require('fs-extra');
 const path = require('path');
@@ -210,26 +210,38 @@ async function checkForWhatsAppBot(volumePath) {
 }
 
 async function checkForProxyOrVPN(container) {
-  const logs = await container.logs({ stdout: true, stderr: true, tail: 500 });
-  const logText = logs.toString('utf-8');
-  for (const indicator of PROXY_VPN_INDICATORS) {
-    if (logText.toLowerCase().includes(indicator)) {
-      return `Possible proxy/VPN detected: ${indicator}`;
+  try {
+    const logs = await container.logs({ stdout: true, stderr: true, tail: 500 });
+    if (!logs) {
+      console.log(`No logs available for container ${container.id}`);
+      return null;
     }
-  }
+    const logText = logs.toString('utf-8');
+    for (const indicator of PROXY_VPN_INDICATORS) {
+      if (logText.toLowerCase().includes(indicator)) {
+        return `Possible proxy/VPN detected: ${indicator}`;
+      }
+    }
 
-  // Check for listening on suspicious ports
-  const execResult = await container.exec({
-    Cmd: ['netstat', '-tulpn'],
-    AttachStdout: true,
-    AttachStderr: true
-  });
-  const output = await execResult.start({});
-  const netstatOutput = output.output.toString('utf-8');
-  for (const port of SUSPICIOUS_PORTS) {
-    if (netstatOutput.includes(`:${port}`)) {
-      return `Suspicious port ${port} detected`;
+    // Check for listening on suspicious ports
+    try {
+      const execResult = await container.exec({
+        Cmd: ['netstat', '-tulpn'],
+        AttachStdout: true,
+        AttachStderr: true
+      });
+      const output = await execResult.start({});
+      const netstatOutput = output.output.toString('utf-8');
+      for (const port of SUSPICIOUS_PORTS) {
+        if (netstatOutput.includes(`:${port}`)) {
+          return `Suspicious port ${port} detected`;
+        }
+      }
+    } catch (execError) {
+      console.error(`Error executing netstat in container ${container.id}:`, execError);
     }
+  } catch (error) {
+    console.error(`Error retrieving logs for container ${container.id}:`, error);
   }
 
   return null;
@@ -247,29 +259,41 @@ async function checkForNezha(container) {
 }
 
 async function checkForCryptoMiner(container) {
-  const logs = await container.logs({ stdout: true, stderr: true, tail: 500 });
-  const logText = logs.toString('utf-8');
-  for (const indicator of MINER_INDICATORS) {
-    if (logText.toLowerCase().includes(indicator)) {
-      return `Possible crypto miner detected: ${indicator}`;
+  try {
+    const logs = await container.logs({ stdout: true, stderr: true, tail: 500 });
+    if (!logs) {
+      console.log(`No logs available for container ${container.id}`);
+      return null;
     }
-  }
+    const logText = logs.toString('utf-8');
+    for (const indicator of MINER_INDICATORS) {
+      if (logText.toLowerCase().includes(indicator)) {
+        return `Possible crypto miner detected: ${indicator}`;
+      }
+    }
 
-  // Check for high CPU usage on specific processes
-  const execResult = await container.exec({
-    Cmd: ['top', '-b', '-n', '1'],
-    AttachStdout: true,
-    AttachStderr: true
-  });
-  const output = await execResult.start({});
-  const topOutput = output.output.toString('utf-8');
-  const highCpuProcesses = topOutput.split('\n')
-    .filter(line => {
-      const cpuUsage = parseFloat(line.split(/\s+/)[8]);
-      return cpuUsage > 80; // Threshold for high CPU usage
-    });
-  if (highCpuProcesses.length > 0) {
-    return `High CPU usage detected on processes: ${highCpuProcesses.join(', ')}`;
+    // Check for high CPU usage on specific processes
+    try {
+      const execResult = await container.exec({
+        Cmd: ['top', '-b', '-n', '1'],
+        AttachStdout: true,
+        AttachStderr: true
+      });
+      const output = await execResult.start({});
+      const topOutput = output.output.toString('utf-8');
+      const highCpuProcesses = topOutput.split('\n')
+        .filter(line => {
+          const cpuUsage = parseFloat(line.split(/\s+/)[8]);
+          return cpuUsage > 98; // Threshold for high CPU usage
+        });
+      if (highCpuProcesses.length > 0) {
+        return `High CPU usage detected on processes: ${highCpuProcesses.join(', ')}`;
+      }
+    } catch (execError) {
+      console.error(`Error executing top in container ${container.id}:`, execError);
+    }
+  } catch (error) {
+    console.error(`Error retrieving logs for container ${container.id}:`, error);
   }
 
   return null;
@@ -527,7 +551,7 @@ async function scanAllContainers() {
 
         const embed = {
           title: "Suspicious activity detected.",
-          color: 0x242424,
+          color: 0xff672f,
           fields: [
             {
               name: "Server UUID",
@@ -545,12 +569,12 @@ async function scanAllContainers() {
             }
           ],
           footer: {
-            text: "XEH, LLC.",
+            text: "XEH Radar v2 (b91)",
             icon_url: "https://i.imgur.com/ndIQ5H4.png"
           },
           timestamp: new Date().toISOString(),
           image: {
-            url: "https://i.imgur.com/xs1qqR7.png"
+            url: "https://i.imgur.com/GjDPxVp.png"
           }
         };
 
