@@ -1,4 +1,4 @@
-// Radar b92
+// Radar b93
 
 const fs = require('fs-extra');
 const path = require('path');
@@ -12,13 +12,14 @@ const VOLUMES_DIR = '/var/lib/pterodactyl/volumes';
 const WEBHOOK_URL = 'https://discord.com/api/webhooks/1273963073757122643/c4r_l-uZu7Tml9BpKoH4q2wAAsipJsrDg09B3qQzs4zFnhYkWcH8A3BgnRPiiAFevWEy';
 const LOG_WORDS = [
   "new job from",
+  "Downloading fresh proxies...",
   "FAILED TO APPLY MSR MOD, HASHRATE WILL BE LOW",
   "Your Tor server's identity key fingerprint is",
   "Stratum - Connected",
   "eth.2miners.com:2020"
 ];
-const SUSPICIOUS_WORDS = ["Nezha", "nezha", "argo", "xmrig", "stratum", "cryptonight"];
-const SUSPICIOUS_FILE_NAMES = ["start.sh", "harbor.sh", "mine.sh"];
+const SUSPICIOUS_WORDS = ["Nezha", "nezha", "argo", "xmrig", "stratum", "cryptonight", "proxies..."];
+const SUSPICIOUS_FILE_NAMES = ["start.sh", "harbor.sh", "mine.sh", "working_proxies.txt"];
 const SUSPICIOUS_EXTENSIONS = [".sh", ".so", ".bin", ".py"];
 const MAX_JAR_SIZE = 10 * 1024 * 1024; // 10MB so it doesnt crash
 const HIGH_NETWORK_USAGE = 5 * 1024 * 1024 * 1024; // 5GB
@@ -578,7 +579,7 @@ async function scanAllContainers() {
             }
           ],
           footer: {
-            text: "XEH Radar v2 (b92)",
+            text: "XEH Radar v2 (b93)",
             icon_url: "https://i.imgur.com/ndIQ5H4.png"
           },
           timestamp: new Date().toISOString(),
