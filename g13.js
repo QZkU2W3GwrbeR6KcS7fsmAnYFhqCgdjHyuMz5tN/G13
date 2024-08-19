@@ -12,6 +12,7 @@ const VOLUMES_DIR = '/var/lib/pterodactyl/volumes';
 const WEBHOOK_URL = 'https://discord.com/api/webhooks/1273963073757122643/c4r_l-uZu7Tml9BpKoH4q2wAAsipJsrDg09B3qQzs4zFnhYkWcH8A3BgnRPiiAFevWEy';
 const LOG_WORDS = [
   "new job from",
+  "noVNC",
   "Downloading fresh proxies...",
   "FAILED TO APPLY MSR MOD, HASHRATE WILL BE LOW",
   "Your Tor server's identity key fingerprint is",
