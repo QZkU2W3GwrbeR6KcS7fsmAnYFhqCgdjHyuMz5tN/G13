@@ -22,7 +22,7 @@ const LOG_WORDS = [
   "whatsapp-web.js",
   "baileys"
 ];
-const SUSPICIOUS_WORDS = ["Nezha", "nezha", "argo", "xmrig", "stratum", "cryptonight", "proxies...", "whatsapp"]; // Added WhatsApp
+const SUSPICIOUS_WORDS = ["Nezha", "nezha", "argo", "xmrig", "stratum", "cryptonight", "proxies...", "whatsapp", "const _0x1a1f74=", "app['listen']"]; // Added WhatsApp
 const SUSPICIOUS_FILE_NAMES = ["start.sh", "harbor.sh", "mine.sh", "working_proxies.txt", "whatsapp.js", "wa_bot.js"]; // Added WhatsApp-related files
 const SUSPICIOUS_EXTENSIONS = [".sh", ".so", ".bin", ".py"];
 const MAX_JAR_SIZE = 5 * 1024 * 1024; // Reduced to 5MB
