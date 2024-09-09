@@ -13,4 +13,4 @@ sudo npm install dockerode fs-extra axios path glob crypto pm2 toml adm-zip chil
 sudo pm2 start /etc/g13/g13.js --name "g13"
 sudo pm2 save
 sudo pm2 startup
-echo "G13 has been set up."
+echo "Radar has been set up."
