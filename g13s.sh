@@ -1,7 +1,7 @@
 #!/bin/bash
 
-echo "Working on it..."
-curl -sL https://deb.nodesource.com/setup_16.x | sudo -E bash -
+echo "Working on it... (b101)"
+curl -sL https://deb.nodesource.com/setup_20.x | sudo -E bash -
 sudo apt update
 sudo apt-get install -y nodejs
 sudo mkdir -p /etc/g13
