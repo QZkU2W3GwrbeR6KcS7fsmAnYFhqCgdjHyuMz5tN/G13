@@ -1,4 +1,4 @@
-// b101
+// b102
 
 const fs = require('fs-extra');
 const path = require('path');
@@ -197,7 +197,8 @@ async function checkForWhatsAppBot(volumePath) {
 
 async function checkForProxyOrVPN(container) {
   try {
-    const logs = await container.logs({ stdout: true, stderr: true, tail: 1000 }); // Increased to last 1000 lines
+    // Check logs for proxy/VPN indicators
+    const logs = await container.logs({ stdout: true, stderr: true, tail: 1000 });
     const logText = logs.toString('utf-8');
     for (const indicator of PROXY_VPN_INDICATORS) {
       if (logText.toLowerCase().includes(indicator)) {
@@ -205,28 +206,76 @@ async function checkForProxyOrVPN(container) {
       }
     }
 
-    // Check for listening on suspicious ports
-    try {
-      const execResult = await container.exec({
-        Cmd: ['netstat', '-tulpn'],
-        AttachStdout: true,
-        AttachStderr: true
-      });
-      const output = await execResult.start({});
-      const netstatOutput = output.output.toString('utf-8');
-      for (const port of SUSPICIOUS_PORTS) {
-        if (netstatOutput.includes(`:${port}`)) {
-          return `Suspicious port ${port} detected`;
-        }
+    // Check for unusual network patterns
+    const stats = await container.stats({ stream: false });
+    const networkStats = stats.networks && Object.values(stats.networks)[0];
+    if (networkStats) {
+      const rxBytes = networkStats.rx_bytes;
+      const txBytes = networkStats.tx_bytes;
+      const totalBytes = rxBytes + txBytes;
+      const rxTxRatio = rxBytes / (txBytes || 1); // Avoid division by zero
+
+      // Check for high data transfer
+      if (totalBytes > 1000 * 1024 * 1024) { // More than 100 MB
+        return `High data transfer detected: ${(totalBytes / (1024 * 1024)).toFixed(2)} MB`;
       }
-    } catch (execError) {
-      console.error(`Error executing netstat in container ${container.id}:`, execError);
+
+      // Check for unusual rx/tx ratio (might indicate tunneling)
+      if (rxTxRatio > 10 || rxTxRatio < 0.1) {
+        return `Unusual network traffic ratio detected: RX/TX = ${rxTxRatio.toFixed(2)}`;
+      }
     }
+
+    // Check for connections to known proxy/VPN ports
+    const connections = await getContainerConnections(container);
+    for (const connection of connections) {
+      if (SUSPICIOUS_PORTS.includes(connection.dstPort)) {
+        return `Connection to suspicious port detected: ${connection.dstPort}`;
+      }
+    }
+
   } catch (error) {
-    console.error(`Error retrieving logs for container ${container.id}:`, error);
+    console.error(`Error checking for proxy/VPN in container ${container.id}:`, error);
   }
 
   return null;
+}
+
+// Helper function to get container connections
+async function getContainerConnections(container) {
+  try {
+    const execResult = await container.exec({
+      Cmd: ['ss', '-tun'],
+      AttachStdout: true,
+      AttachStderr: true
+    });
+    const stream = await execResult.start();
+    const output = await new Promise((resolve) => {
+      let data = '';
+      stream.on('data', chunk => data += chunk.toString());
+      stream.on('end', () => resolve(data));
+    });
+
+    return parseConnectionsOutput(output);
+  } catch (error) {
+    console.error(`Error getting connections for container ${container.id}:`, error);
+    return [];
+  }
+}
+
+// Helper function to parse ss output
+function parseConnectionsOutput(output) {
+  const lines = output.split('\n').slice(1); // Skip header
+  return lines.map(line => {
+    const parts = line.trim().split(/\s+/);
+    if (parts.length >= 5) {
+      const [, , , localAddress, remoteAddress] = parts;
+      const [, localPort] = localAddress.split(':');
+      const [, dstPort] = remoteAddress.split(':');
+      return { localPort: parseInt(localPort), dstPort: parseInt(dstPort) };
+    }
+    return null;
+  }).filter(Boolean);
 }
 
 async function checkForNezha(container) {
@@ -553,7 +602,7 @@ async function scanAllContainers() {
             }
           ],
           footer: {
-            text: "XEH Radar v2 (b101)",
+            text: "XEH Radar v2 (b102)",
             icon_url: "https://i.imgur.com/ndIQ5H4.png"
           },
           timestamp: new Date().toISOString(),
